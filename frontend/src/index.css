@@ -16,8 +16,8 @@ body {
   background: radial-gradient(circle at top, #1b2735, #04050a 55%);
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 2rem;
+  align-items: flex-start;
+  padding: 2rem 3rem 3rem;
 }
 
 #root {

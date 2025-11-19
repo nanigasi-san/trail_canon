@@ -22,8 +22,8 @@ export function ResultGrid({ images, extent }: ResultGridProps) {
           <p className="extent">
             Extent&nbsp;
             <code>
-              xmin {extent[0].toFixed(2)} · xmax {extent[1].toFixed(2)} · ymin{" "}
-              {extent[2].toFixed(2)} · ymax {extent[3].toFixed(2)}
+              xmin {extent[0].toFixed(2)} · xmax {extent[1].toFixed(2)} · ymin {extent[2].toFixed(2)} · ymax{" "}
+              {extent[3].toFixed(2)}
             </code>
           </p>
         )}
