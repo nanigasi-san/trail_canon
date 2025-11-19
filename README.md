@@ -9,6 +9,7 @@ Electron ベースのデスクトップアプリとして、オリエンテー�
 - DEM のラスタライズとスムージング
 - 0.1〜10m のメッシュサイズを切り替えて DEM を再生成
 - シンプルで情報量の多い UI とメッシュ設定パネル
+- ステータスメッセージでファイル読込状況やエラーを通知
 
 ## セットアップ
 
@@ -42,3 +43,8 @@ Codex の実行環境では `https://registry.npmjs.org/electron` へのアク�
 - 点群の属性（反射強度など）の取り込み
 - 斜面解析や陰影起伏図の追加
 - GeoTIFF などへのエクスポート
+
+## アーキテクチャと拡張
+
+- メイン／プリロード／レンダラーの責務分離やサービス・ビュークラス構成など、詳細な実装ガイドは [`docs/IMPLEMENTATION.md`](docs/IMPLEMENTATION.md) に記載しています。
+- 新しい解析処理は `src/renderer/services/`、UI パネルは `src/renderer/view/` に追加し、`src/renderer/app.js` から状態連携する構造になっています。

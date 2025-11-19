@@ -158,6 +158,19 @@ select {
   color: #f1f5f9;
 }
 
+.status-message {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  padding: 8px 12px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
 #summary-list {
   padding-left: 18px;
   line-height: 1.6;

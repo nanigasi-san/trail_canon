@@ -2,6 +2,10 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+const CHANNELS = {
+  POINT_CLOUD_CHOOSE: 'point-cloud:choose',
+};
+
 const isDev = process.env.NODE_ENV === 'development';
 
 const createWindow = () => {
@@ -21,23 +25,7 @@ const createWindow = () => {
   }
 };
 
-app.whenReady().then(() => {
-  createWindow();
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-    }
-  });
-});
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
-
-ipcMain.handle('choose-point-cloud', async () => {
+const handleChoosePointCloud = async () => {
   const result = await dialog.showOpenDialog({
     title: '点群ファイルを選択',
     filters: [
@@ -56,4 +44,29 @@ ipcMain.handle('choose-point-cloud', async () => {
   const raw = fs.readFileSync(filePath, 'utf8');
 
   return { canceled: false, fileName, raw };
-});
+};
+
+const registerAppEvents = () => {
+  app.whenReady().then(() => {
+    createWindow();
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+};
+
+const registerIpcHandlers = () => {
+  ipcMain.handle(CHANNELS.POINT_CLOUD_CHOOSE, handleChoosePointCloud);
+};
+
+registerAppEvents();
+registerIpcHandlers();
