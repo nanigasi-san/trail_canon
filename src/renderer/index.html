@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline';" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trail Canon - Point Cloud Explorer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <p class="eyebrow">orienteering drafting toolkit</p>
+        <h1>Trail Canon</h1>
+        <p class="lead">
+          点群データを読み込み、地形の特徴を把握しやすい DEM を瞬時に生成します。
+        </p>
+      </div>
+      <button id="load-button">点群を読み込む</button>
+    </header>
+
+    <main>
+      <section class="panel" id="status-panel">
+        <h2>ファイル情報</h2>
+        <div class="status-item">
+          <span>ファイル名</span>
+          <strong id="file-name">未読込み</strong>
+        </div>
+        <div class="status-grid">
+          <div>
+            <span>点数</span>
+            <strong id="point-count">-</strong>
+          </div>
+          <div>
+            <span>標高範囲</span>
+            <strong id="elevation-range">-</strong>
+          </div>
+          <div>
+            <span>領域サイズ</span>
+            <strong id="extent">-</strong>
+          </div>
+        </div>
+        <div class="control-row">
+          <label for="mesh-size">メッシュサイズ</label>
+          <div class="control-row__inputs">
+            <select id="mesh-size">
+              <option value="0.1">0.10 m</option>
+              <option value="0.25">0.25 m</option>
+              <option value="0.5">0.50 m</option>
+              <option value="1" selected>1.0 m</option>
+              <option value="5">5 m</option>
+              <option value="10">10 m</option>
+            </select>
+            <span class="control-note">セル数: <strong id="grid-size">-</strong></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="visual-panel">
+        <div class="panel-header">
+          <h2>DEM プレビュー</h2>
+          <p>標高の変化をフルカラーのヒートマップで確認できます。</p>
+        </div>
+        <canvas id="dem-canvas" width="512" height="512"></canvas>
+      </section>
+
+      <section class="panel" id="insights-panel">
+        <h2>サマリー</h2>
+        <ul id="summary-list">
+          <li>読み込んだデータは DEM 生成に適したフォーマット（x,y,z）である必要があります。</li>
+          <li>点のばらつきが多い場合は解像度を下げると表示が安定します。</li>
+          <li>レンダリング色は地形の起伏を視覚的に把握しやすい配色です。</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>Trail Canon &mdash; オリエンテーリング地図作成のための実験的ツール</p>
+    </footer>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

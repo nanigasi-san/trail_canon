@@ -1,0 +1,13 @@
+{
+  "name": "trail-canon",
+  "version": "0.1.0",
+  "description": "Point cloud oriented desktop GIS helper for orienteering map creation",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^28.2.0"
+  }
+}
