@@ -32,13 +32,21 @@ export interface TrailErrorResponse {
   message: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000";
+const API_BASE_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 const sanitizeParams = (params?: TrailParams): TrailParams | undefined => {
   if (!params) return undefined;
   const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null);
   if (!entries.length) return undefined;
   return Object.fromEntries(entries) as TrailParams;
+};
+
+const toAbsoluteUrl = (path: string): string => {
+  try {
+    return new URL(path, `${API_BASE_URL}/`).toString();
+  } catch {
+    return path;
+  }
 };
 
 export async function detectTrails(options: TrailDetectOptions): Promise<TrailDetectResponse> {
@@ -76,5 +84,12 @@ export async function detectTrails(options: TrailDetectOptions): Promise<TrailDe
     throw new Error((data as TrailErrorResponse).message ?? "Processing failed.");
   }
 
-  return data as TrailDetectResponse;
+  const typed = data as TrailDetectResponse;
+  const absoluteImages: TrailImages = {
+    ridge: toAbsoluteUrl(typed.images.ridge),
+    gpd: toAbsoluteUrl(typed.images.gpd),
+    uoi: toAbsoluteUrl(typed.images.uoi),
+    trail_score: toAbsoluteUrl(typed.images.trail_score),
+  };
+  return { ...typed, images: absoluteImages };
 }
