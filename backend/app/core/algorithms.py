@@ -1,4 +1,4 @@
-"""Numerical routines that derive trail metrics from LiDAR point clouds."""
+"""LiDAR 点群からトレイル指標 (RI/GPD/UOI/Score) を生成するための計算群。"""
 
 from __future__ import annotations
 
@@ -11,12 +11,13 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from scipy.interpolate import griddata
-from scipy.ndimage import gaussian_filter, gaussian_laplace
+from scipy.ndimage import gaussian_filter, gaussian_laplace, zoom
 
 
+# ---- データ構造と設定パラメータ -------------------------------------------------
 @dataclass(slots=True)
 class PointCloud:
-    """In-memory cache of LAS/LAZ data."""
+    """LAS/LAZ を numpy 配列に展開して保持する軽量キャッシュ。"""
 
     x: NDArray[np.float64]
     y: NDArray[np.float64]
@@ -25,21 +26,29 @@ class PointCloud:
 
 
 class TrailParams(BaseModel):
-    """Collection of tunable parameters for trail detection."""
+    """トレイル検出のチューニング項目。UI からの入力をそのまま保持する。"""
 
+    # --- DEM/ラスタ解像度 ---
     grid_size: float = Field(1.0, gt=0)
+    sample_max_points: int = Field(5_000_000, gt=0)
+    # --- リッジ検出 (RI) ---
     ridge_scales_m: Tuple[float, float, float] = (3.0, 6.0, 9.0)
     tpi_scale_m: float = Field(15.0, gt=0)
     tpi_percentiles: Tuple[float, float] = (5.0, 95.0)
     log_percentiles: Tuple[float, float] = (5.0, 95.0)
-    slope_pref_deg: float = Field(20.0, ge=0.0)
+    slope_pref_deg: float = Field(20.0, gt=0.0)
     slope_sigma_deg: float = Field(20.0, gt=0.0)
+    # --- 地上点密度 (GPD) ---
     density_percentile: float = Field(99.0, gt=0.0, le=100.0)
+    density_grid_size: float = Field(1.0, gt=0.0)
     density_classes: Tuple[int, ...] = (2,)
+    # --- DEM 作成時に地面とみなす分類 ---
     ground_classes: Tuple[int, ...] = (2, 22)
+    # --- 低木帯 (UOI/フラットネス) ---
     uoi_height_band: Tuple[float, float] = (0.0, 1.0)
     uoi_percentile: float = Field(95.0, gt=0.0, le=100.0)
-    flatness_classes: Tuple[int, ...] = (3, 4, 5)
+    flat_grid_size: float = Field(1.0, gt=0.0)
+    flatness_classes: Tuple[int, ...] = (2, 4, 22)
     flatness_percentile: float = Field(95.0, gt=0.0, le=100.0)
 
     model_config = ConfigDict(validate_default=True)
@@ -60,18 +69,21 @@ class TrailParams(BaseModel):
         return value
 
 
+# ---- 入出力ヘルパー -----------------------------------------------------------
 def _load_point_cloud(las_files: Sequence[str]) -> PointCloud:
-    """Load LAS/LAZ points into numpy arrays."""
+    """複数 LAS/LAZ を読み込み、後段の計算が扱いやすい numpy 配列へ展開する。"""
     xs: List[NDArray[np.float64]] = []
     ys: List[NDArray[np.float64]] = []
     zs: List[NDArray[np.float64]] = []
     classes: List[NDArray[np.int32]] = []
 
     for file_path in las_files:
+        # 各ファイルを絶対パス化して存在チェック
         path = Path(file_path).expanduser()
         if not path.exists():
             raise FileNotFoundError(f"Point cloud file not found: {path}")
         las = laspy.read(path)
+        # laspy の lazio オブジェクトから生配列を一気に取り出す
         xs.append(np.asarray(las.x, dtype=np.float64))
         ys.append(np.asarray(las.y, dtype=np.float64))
         zs.append(np.asarray(las.z, dtype=np.float64))
@@ -80,6 +92,7 @@ def _load_point_cloud(las_files: Sequence[str]) -> PointCloud:
     if not xs:
         raise ValueError("No LAS/LAZ files supplied.")
 
+    # リスト化したチャンクを 1 本の配列へ結合
     x = np.concatenate(xs)
     y = np.concatenate(ys)
     z = np.concatenate(zs)
@@ -87,7 +100,10 @@ def _load_point_cloud(las_files: Sequence[str]) -> PointCloud:
     return PointCloud(x=x, y=y, z=z, classification=classification)
 
 
-def _filter_by_classes(point_cloud: PointCloud, classes: Iterable[int]) -> NDArray[np.bool_]:
+def _filter_by_classes(
+    point_cloud: PointCloud, classes: Iterable[int]
+) -> NDArray[np.bool_]:
+    """LAS 分類コードから対象クラスのみ True になるブーリアンマスクを作る。"""
     class_array = np.array(list(classes), dtype=np.int32)
     return np.isin(point_cloud.classification, class_array)
 
@@ -97,11 +113,13 @@ def _build_grid(
     y: NDArray[np.float64],
     grid_size: float,
 ) -> Tuple[NDArray[np.float64], NDArray[np.float64], Dict[str, float]]:
+    """点群の外接矩形から DEM 用の規則グリッドを生成する。"""
     xmin = float(np.min(x))
     xmax = float(np.max(x))
     ymin = float(np.min(y))
     ymax = float(np.max(y))
 
+    # 最低 2x2 を確保しつつ、端を含むよう +1 セルする
     nx = max(int(np.ceil((xmax - xmin) / grid_size)) + 1, 2)
     ny = max(int(np.ceil((ymax - ymin) / grid_size)) + 1, 2)
 
@@ -109,45 +127,75 @@ def _build_grid(
     y_coords = ymin + np.arange(ny, dtype=np.float64) * grid_size
     grid_x, grid_y = np.meshgrid(x_coords, y_coords)
 
+    xmax = float(x_coords[-1])
+    ymax = float(y_coords[-1])
     grid = {
         "xmin": xmin,
-        "xmax": float(x_coords[-1]),
+        "xmax": xmax,
         "ymin": ymin,
-        "ymax": float(y_coords[-1]),
+        "ymax": ymax,
         "nx": nx,
         "ny": ny,
         "grid_size": grid_size,
-        "extent": (xmin, float(x_coords[-1]), ymin, float(y_coords[-1])),
+        "extent": (xmin, xmax, ymin, ymax),
     }
     return grid_x, grid_y, grid
 
 
-def _normalize_percentile(
-    array: NDArray[np.floating],
-    lower: float,
-    upper: float,
+def _grid_from_extent(
+    extent: Tuple[float, float, float, float], grid_size: float
+) -> Dict[str, float]:
+    """既知の範囲を任意解像度で敷き詰める際のグリッドメタデータを生成する。"""
+    xmin, xmax, ymin, ymax = extent
+    nx = max(int(np.ceil((xmax - xmin) / grid_size)) + 1, 2)
+    ny = max(int(np.ceil((ymax - ymin) / grid_size)) + 1, 2)
+    xmax = xmin + (nx - 1) * grid_size
+    ymax = ymin + (ny - 1) * grid_size
+    return {
+        "xmin": xmin,
+        "xmax": xmax,
+        "ymin": ymin,
+        "ymax": ymax,
+        "nx": nx,
+        "ny": ny,
+        "grid_size": grid_size,
+        "extent": (xmin, xmax, ymin, ymax),
+    }
+
+
+def _normalize(
+    array: NDArray[np.floating], lower: float = 5.0, upper: float = 95.0
 ) -> NDArray[np.float32]:
-    if upper <= lower:
-        upper = lower + 1e-3
-    if np.all(np.isnan(array)):
+    """分布の下位/上位パーセンタイルで強制スケーリングし、0-1 正規化する。"""
+    finite = array[np.isfinite(array)]
+    if finite.size == 0:
         return np.zeros_like(array, dtype=np.float32)
-    lo = np.nanpercentile(array, lower)
-    hi = np.nanpercentile(array, upper)
+    lo = float(np.percentile(finite, lower))
+    hi = float(np.percentile(finite, upper))
     if np.isclose(hi, lo):
-        return np.zeros_like(array, dtype=np.float32)
+        hi = lo + 1e-6
     normalized = (array - lo) / (hi - lo)
     return np.clip(normalized, 0.0, 1.0).astype(np.float32)
 
 
-def _normalize_minmax(array: NDArray[np.floating]) -> NDArray[np.float32]:
-    if np.all(np.isnan(array)):
-        return np.zeros_like(array, dtype=np.float32)
-    min_val = np.nanmin(array)
-    max_val = np.nanmax(array)
-    if np.isclose(max_val, min_val):
-        return np.zeros_like(array, dtype=np.float32)
-    normalized = (array - min_val) / (max_val - min_val)
-    return np.clip(normalized, 0.0, 1.0).astype(np.float32)
+def _resample_to_grid(
+    data: NDArray[np.floating],
+    mask: Optional[NDArray[np.bool_]],
+    grid: Dict[str, float],
+) -> NDArray[np.float32]:
+    """粗いラスタを最終 DEM と同じ解像度へリサンプリングし、必要に応じてマスクを適用する。"""
+    target_shape = (int(grid["ny"]), int(grid["nx"]))
+    if data.shape != target_shape:
+        # SciPy の zoom で連続的にリサンプリングし、エッジを超えないようズーム倍率を計算
+        zoom_y = target_shape[0] / data.shape[0]
+        zoom_x = target_shape[1] / data.shape[1]
+        data = zoom(data, zoom=(zoom_y, zoom_x), order=1)
+        if mask is not None:
+            # マスクは最近傍で補間することで有効/無効の二値性を保つ
+            mask_zoom = zoom(mask.astype(np.float32), zoom=(zoom_y, zoom_x), order=0)
+            data *= (mask_zoom >= 0.5).astype(np.float32)
+    data = data[: target_shape[0], : target_shape[1]]
+    return data.astype(np.float32, copy=False)
 
 
 def compute_dem_from_las(
@@ -156,7 +204,8 @@ def compute_dem_from_las(
     *,
     point_data: Optional[PointCloud] = None,
 ) -> Tuple[NDArray[np.float32], Dict[str, float]]:
-    """Generate a raster DEM from ground-classified points."""
+    """地面クラスの点だけを使って DEM を補間する。"""
+    # 呼び出し側で点群を共有できるよう point_data を受け取り、無ければ読み込む
     points = point_data or _load_point_cloud(las_files)
     mask = _filter_by_classes(points, params.ground_classes)
     if not np.any(mask):
@@ -166,8 +215,17 @@ def compute_dem_from_las(
     ground_y = points.y[mask]
     ground_z = points.z[mask]
 
-    grid_x, grid_y, grid = _build_grid(ground_x, ground_y, params.grid_size)
+    total = ground_x.size
+    if total > params.sample_max_points:
+        # 非常に大きい点群はランダムサンプリングして補間コストを抑える
+        rng = np.random.default_rng(42)
+        idx = rng.choice(total, params.sample_max_points, replace=False)
+        ground_x = ground_x[idx]
+        ground_y = ground_y[idx]
+        ground_z = ground_z[idx]
 
+    grid_x, grid_y, grid = _build_grid(ground_x, ground_y, params.grid_size)
+    # 線形補間だけだと NaN が残るので最近傍と組み合わせて穴埋めする
     locations = np.column_stack((ground_x, ground_y))
     dem_linear = griddata(locations, ground_z, (grid_x, grid_y), method="linear")
     dem_nearest = griddata(locations, ground_z, (grid_x, grid_y), method="nearest")
@@ -182,82 +240,90 @@ def compute_ri(
     grid: Dict[str, float],
     params: TrailParams,
 ) -> NDArray[np.float32]:
-    """Compute the Ridge Index using TPI, LoG filters, and slope weighting."""
-    sigma_tpi = max(params.tpi_scale_m / params.grid_size, 0.5)
-    local_mean = gaussian_filter(dem, sigma=sigma_tpi, mode="nearest")
-    tpi = dem - local_mean
-    tpi_norm = _normalize_percentile(tpi, params.tpi_percentiles[0], params.tpi_percentiles[1])
-
+    """LoG, TPI, 斜面重みを組み合わせてリッジ指数 (RI) を計算する。"""
+    # --- LoG によるリッジ強調 (複数スケールで最大値を採用) ---
     log_maps: List[NDArray[np.float32]] = []
     for scale in params.ridge_scales_m:
-        sigma = max(scale / params.grid_size, 0.5)
+        sigma = max(scale / grid["grid_size"], 1.0)
         response = -gaussian_laplace(dem, sigma=sigma, mode="nearest")
-        log_maps.append(_normalize_minmax(response))
-    log_stack = np.maximum.reduce(log_maps) if log_maps else tpi_norm
+        log_maps.append(
+            _normalize(response, params.log_percentiles[0], params.log_percentiles[1])
+        )
+    log_response = (
+        np.maximum.reduce(log_maps)
+        if log_maps
+        else np.zeros_like(dem, dtype=np.float32)
+    )
 
-    grad_y, grad_x = np.gradient(dem, params.grid_size, params.grid_size)
-    slope_rad = np.arctan(np.sqrt(grad_x**2 + grad_y**2))
-    slope_deg = np.degrees(slope_rad)
-    slope_weight = np.exp(-((slope_deg - params.slope_pref_deg) ** 2) / (2 * params.slope_sigma_deg**2))
-    slope_weight = np.clip(slope_weight, 0.0, 1.0).astype(np.float32)
+    # --- Gaussian 平滑で得た局所平均との差分が TPI ---
+    sigma_tpi = max(params.tpi_scale_m / grid["grid_size"], 1.0)
+    local_mean = gaussian_filter(dem, sigma=sigma_tpi, mode="nearest")
+    tpi = dem - local_mean
+    tpi_norm = _normalize(tpi, params.tpi_percentiles[0], params.tpi_percentiles[1])
 
-    raw_score = (0.6 * log_stack + 0.4 * np.clip(tpi_norm, 0.0, 1.0)) * slope_weight
-    return _normalize_minmax(raw_score)
+    # --- 傾斜が好みの角度から外れるほどペナルティを与える ---
+    grad_y, grad_x = np.gradient(local_mean, grid["grid_size"], grid["grid_size"])
+    slope_deg = np.degrees(np.arctan(np.hypot(grad_x, grad_y)))
+    slope_pref = max(params.slope_pref_deg, 1e-3)
+    slope_weight = np.exp(-np.square(slope_deg / slope_pref)).astype(np.float32)
 
-
-def _bin_points_to_grid(
-    x: NDArray[np.float64],
-    y: NDArray[np.float64],
-    grid: Dict[str, float],
-    grid_size: float,
-) -> Tuple[NDArray[np.int64], NDArray[np.int64], NDArray[np.bool_]]:
-    xmin = grid["xmin"]
-    ymin = grid["ymin"]
-    nx = int(grid["nx"])
-    ny = int(grid["ny"])
-    ix = np.floor((x - xmin) / grid_size).astype(np.int64)
-    iy = np.floor((y - ymin) / grid_size).astype(np.int64)
-    valid = (ix >= 0) & (ix < nx) & (iy >= 0) & (iy < ny)
-    return ix, iy, valid
+    # LoG と TPI をブレンドし、最後に 1m スケールで滑らかにする
+    raw_score = (0.6 * log_response + 0.4 * np.clip(tpi_norm, 0.0, 1.0)) * slope_weight
+    ridge_score = _normalize(raw_score)
+    return gaussian_filter(ridge_score, sigma=1.0, mode="nearest").astype(np.float32)
 
 
 def compute_gpd(
-    las_files: List[str],
     grid: Dict[str, float],
     params: TrailParams,
     *,
-    point_data: Optional[PointCloud] = None,
+    point_data: PointCloud,
 ) -> NDArray[np.float32]:
-    """Compute per-cell ground point density."""
-    points = point_data or _load_point_cloud(las_files)
-    mask = _filter_by_classes(points, params.density_classes)
+    """地上分類の点を数えて密度グリッドを作り、DEM と同じ解像度へ写像する。"""
+    mask = _filter_by_classes(point_data, params.density_classes)
     if not np.any(mask):
         return np.zeros((int(grid["ny"]), int(grid["nx"])), dtype=np.float32)
 
-    x = points.x[mask]
-    y = points.y[mask]
-    ix, iy, valid = _bin_points_to_grid(x, y, grid, params.grid_size)
-    nx = int(grid["nx"])
-    ny = int(grid["ny"])
-    counts = np.zeros((ny, nx), dtype=np.float64)
-    np.add.at(counts, (iy[valid], ix[valid]), 1)
-    density = counts / (params.grid_size**2)
-    return _normalize_percentile(density, 5.0, params.density_percentile)
+    x = point_data.x[mask].astype(np.float64)
+    y = point_data.y[mask].astype(np.float64)
+    # GPD は任意のスケールで集計できるよう専用グリッドを作成
+    density_grid = _grid_from_extent(grid["extent"], params.density_grid_size)
 
+    cols = np.clip(
+        np.floor((x - density_grid["xmin"]) / density_grid["grid_size"]).astype(
+            np.int64
+        ),
+        0,
+        density_grid["nx"] - 1,
+    )
+    rows = np.clip(
+        np.floor((y - density_grid["ymin"]) / density_grid["grid_size"]).astype(
+            np.int64
+        ),
+        0,
+        density_grid["ny"] - 1,
+    )
 
-def _sample_dem_at_points(
-    dem: NDArray[np.float32],
-    grid: Dict[str, float],
-    x: NDArray[np.float64],
-    y: NDArray[np.float64],
-) -> NDArray[np.float32]:
-    ix, iy, valid = _bin_points_to_grid(x, y, grid, grid["grid_size"])
-    ny, nx = dem.shape
-    samples = np.full_like(x, np.nan, dtype=np.float32)
-    ix = np.clip(ix, 0, nx - 1)
-    iy = np.clip(iy, 0, ny - 1)
-    samples[valid] = dem[iy[valid], ix[valid]]
-    return np.nan_to_num(samples, nan=float(np.nanmedian(samples[valid]) if np.any(valid) else 0.0))
+    flat_size = density_grid["nx"] * density_grid["ny"]
+    counts = np.bincount(rows * density_grid["nx"] + cols, minlength=flat_size).astype(
+        np.float32
+    )
+    density = counts.reshape(density_grid["ny"], density_grid["nx"])
+
+    valid_mask = density > 0.0
+    if not np.any(valid_mask):
+        return np.zeros((int(grid["ny"]), int(grid["nx"])), dtype=np.float32)
+
+    vmax = float(np.percentile(density[valid_mask], params.density_percentile))
+    if vmax <= 0:
+        vmax = float(np.max(density[valid_mask]))
+    if vmax <= 0:
+        vmax = 1.0
+
+    density_norm = np.zeros_like(density, dtype=np.float32)
+    density_norm[valid_mask] = np.clip(density[valid_mask] / vmax, 0.0, 1.0)
+    # GPD は最終レンダリング用の DEM グリッドへリサンプリングして返す
+    return _resample_to_grid(density_norm, valid_mask, grid)
 
 
 def compute_uoi(
@@ -268,46 +334,88 @@ def compute_uoi(
     *,
     point_data: Optional[PointCloud] = None,
 ) -> NDArray[np.float32]:
-    """Compute the Undergrowth Openness Index."""
+    """低木帯の高さばらつきを標準偏差で測り、開放度 (UOI/平坦度) を算出する。"""
     points = point_data or _load_point_cloud(las_files)
     mask = _filter_by_classes(points, params.flatness_classes)
     if not np.any(mask):
         return np.zeros((int(grid["ny"]), int(grid["nx"])), dtype=np.float32)
 
-    x = points.x[mask]
-    y = points.y[mask]
-    z = points.z[mask]
-    dtm_at_points = _sample_dem_at_points(dem, grid, x, y)
-    normalized_z = z - dtm_at_points
+    x = points.x[mask].astype(np.float64)
+    y = points.y[mask].astype(np.float64)
+    z = points.z[mask].astype(np.float64)
+
+    cols_main = np.floor((x - grid["xmin"]) / grid["grid_size"]).astype(np.int64)
+    rows_main = np.floor((y - grid["ymin"]) / grid["grid_size"]).astype(np.int64)
+    valid = (
+        (cols_main >= 0)
+        & (cols_main < grid["nx"])
+        & (rows_main >= 0)
+        & (rows_main < grid["ny"])
+    )
+    if not np.any(valid):
+        return np.zeros((int(grid["ny"]), int(grid["nx"])), dtype=np.float32)
+
+    cols_main = cols_main[valid]
+    rows_main = rows_main[valid]
+    x = x[valid]
+    y = y[valid]
+    z = z[valid]
+
+    dtm_values = dem[rows_main, cols_main]
+    normalized_z = z - dtm_values
+
+    # DEM からの相対高さ (低木の高さ帯) でフィルタする
     band_min, band_max = params.uoi_height_band
     height_mask = (normalized_z >= band_min) & (normalized_z <= band_max)
     if not np.any(height_mask):
         return np.zeros((int(grid["ny"]), int(grid["nx"])), dtype=np.float32)
 
-    band_x = x[height_mask]
-    band_y = y[height_mask]
-    band_z = normalized_z[height_mask]
-    ix, iy, valid = _bin_points_to_grid(band_x, band_y, grid, params.grid_size)
-    nx = int(grid["nx"])
-    ny = int(grid["ny"])
-    sum_vals = np.zeros((ny, nx), dtype=np.float64)
-    sum_sq = np.zeros((ny, nx), dtype=np.float64)
-    counts = np.zeros((ny, nx), dtype=np.float64)
+    x = x[height_mask]
+    y = y[height_mask]
+    normalized_z = normalized_z[height_mask]
 
-    np.add.at(sum_vals, (iy[valid], ix[valid]), band_z[valid])
-    np.add.at(sum_sq, (iy[valid], ix[valid]), band_z[valid] ** 2)
-    np.add.at(counts, (iy[valid], ix[valid]), 1)
+    # 平坦度の集計解像度 (flat_grid_size) に合わせた粗いグリッドを作る
+    flat_grid = _grid_from_extent(grid["extent"], params.flat_grid_size)
+    cols_flat = np.clip(
+        np.floor((x - flat_grid["xmin"]) / flat_grid["grid_size"]).astype(np.int64),
+        0,
+        flat_grid["nx"] - 1,
+    )
+    rows_flat = np.clip(
+        np.floor((y - flat_grid["ymin"]) / flat_grid["grid_size"]).astype(np.int64),
+        0,
+        flat_grid["ny"] - 1,
+    )
 
+    flat_size = flat_grid["nx"] * flat_grid["ny"]
+    sum_vals = np.zeros(flat_size, dtype=np.float64)
+    sum_sq = np.zeros(flat_size, dtype=np.float64)
+    counts = np.zeros(flat_size, dtype=np.float64)
+    cell_ids = rows_flat * flat_grid["nx"] + cols_flat
+    np.add.at(sum_vals, cell_ids, normalized_z)
+    np.add.at(sum_sq, cell_ids, normalized_z * normalized_z)
+    np.add.at(counts, cell_ids, 1.0)
+
+    # 各セルで (平均, 分散, 標準偏差) を手計算することでメモリと速度を確保
+    valid_cells = counts > 0
     mean = np.zeros_like(sum_vals)
-    nonzero = counts > 0
-    mean[nonzero] = sum_vals[nonzero] / counts[nonzero]
+    mean[valid_cells] = sum_vals[valid_cells] / counts[valid_cells]
     variance = np.zeros_like(sum_vals)
-    variance[nonzero] = (sum_sq[nonzero] / counts[nonzero]) - (mean[nonzero] ** 2)
-    std = np.zeros_like(sum_vals)
-    std[nonzero] = np.sqrt(np.clip(variance[nonzero], 0.0, None))
+    variance[valid_cells] = np.maximum(
+        sum_sq[valid_cells] / counts[valid_cells] - np.square(mean[valid_cells]),
+        0.0,
+    )
+    std = np.full_like(sum_vals, np.nan, dtype=np.float64)
+    std[valid_cells] = np.sqrt(variance[valid_cells])
 
-    openness = 1.0 - _normalize_percentile(std, 5.0, params.flatness_percentile)
-    return np.clip(openness, 0.0, 1.0).astype(np.float32)
+    std_grid = std.reshape(flat_grid["ny"], flat_grid["nx"]).astype(np.float32)
+    roughness = _normalize(std_grid, 5.0, params.uoi_percentile)
+    flatness = 1.0 - roughness
+    flatness[~np.isfinite(flatness)] = 0.0
+
+    # 最後に DEM グリッドへ拡大し、点が存在したセルのみ残す
+    mask_coarse = valid_cells.reshape(flat_grid["ny"], flat_grid["nx"])
+    return _resample_to_grid(flatness, mask_coarse, grid)
 
 
 def compute_trail_score(
@@ -315,7 +423,7 @@ def compute_trail_score(
     gpd: NDArray[np.float32],
     uoi: NDArray[np.float32],
 ) -> NDArray[np.float32]:
-    """Combine three metrics into a final trail-likelihood score."""
+    """3 つの指標の平均を取り、0〜1 の最終スコアとして返す。"""
     return np.clip((ri + gpd + uoi) / 3.0, 0.0, 1.0).astype(np.float32)
 
 
@@ -323,11 +431,12 @@ def run_trail_detection(
     las_files: List[str],
     params: TrailParams,
 ) -> Dict[str, NDArray[np.float32]]:
-    """Execute the full pipeline from LAS input to normalized rasters."""
+    """LAS 入力から RI/GPD/UOI/Score をまとめて計算し、描画しやすい dict で返す。"""
     point_data = _load_point_cloud(las_files)
+    # 点群の読み込みは高価なので後続へ参照を共有する
     dem, grid = compute_dem_from_las(las_files, params, point_data=point_data)
     ri = compute_ri(dem, grid, params)
-    gpd = compute_gpd(las_files, grid, params, point_data=point_data)
+    gpd = compute_gpd(grid, params, point_data=point_data)
     uoi = compute_uoi(las_files, dem, grid, params, point_data=point_data)
     score = compute_trail_score(ri, gpd, uoi)
     return {
