@@ -25,7 +25,12 @@ from starlette.middleware import _MiddlewareFactory
 
 from .config import get_settings
 from .core.algorithms import TrailParams, run_trail_detection
-from .schemas import TrailDetectRequest, TrailDetectResponse, TrailErrorResponse, TrailImagePaths
+from .schemas import (
+    TrailDetectRequest,
+    TrailDetectResponse,
+    TrailErrorResponse,
+    TrailImagePaths,
+)
 
 settings = get_settings()
 
@@ -37,7 +42,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.mount(settings.static_url_prefix, StaticFiles(directory=settings.static_root), name="results")
+app.mount(
+    settings.static_url_prefix,
+    StaticFiles(directory=settings.static_root),
+    name="results",
+)
 
 
 def _error(message: str, status_code: int = 400) -> JSONResponse:
@@ -46,7 +55,9 @@ def _error(message: str, status_code: int = 400) -> JSONResponse:
     return JSONResponse(status_code=status_code, content=payload)
 
 
-def _render_heatmap(array: np.ndarray, out_path: Path, cmap: str, show_legend: bool) -> None:
+def _render_heatmap(
+    array: np.ndarray, out_path: Path, cmap: str, show_legend: bool
+) -> None:
     """Save a single-channel array as a PNG heatmap.
 
     Args:
@@ -72,7 +83,9 @@ def _render_heatmap(array: np.ndarray, out_path: Path, cmap: str, show_legend: b
     plt.close(fig)
 
 
-def _save_images(arrays: Dict[str, np.ndarray], run_id: str, show_legend: bool) -> Dict[str, str]:
+def _save_images(
+    arrays: Dict[str, np.ndarray], run_id: str, show_legend: bool
+) -> Dict[str, str]:
     """Render all rasters and return HTTP paths.
 
     Args:
@@ -84,10 +97,10 @@ def _save_images(arrays: Dict[str, np.ndarray], run_id: str, show_legend: bool) 
         dict: metric 名 -> 静的ファイル URL。
     """
     cmap_map = {
-        "ridge": "magma",
-        "gpd": "viridis",
-        "uoi": "plasma",
-        "trail_score": "cividis",
+        "ridge": "turbo",
+        "gpd": "turbo",
+        "uoi": "cividis",
+        "trail_score": "turbo",
     }
     storage_dir = settings.static_root / run_id
     saved: Dict[str, str] = {}
@@ -181,7 +194,9 @@ def _handle_detection(
         TrailDetectResponse | JSONResponse: 成功なら TrailDetectResponse、失敗時はエラーレスポンス。
     """
     try:
-        return _run_detection_pipeline(pointcloud_files, grid_size, params_override, output_dir, show_legend)
+        return _run_detection_pipeline(
+            pointcloud_files, grid_size, params_override, output_dir, show_legend
+        )
     except ValidationError as exc:
         return _error(f"Invalid parameters: {exc}", status_code=400)
     except FileNotFoundError as exc:
@@ -255,10 +270,14 @@ async def detect_trails_from_upload(
     with TemporaryDirectory(prefix="trail_upload_") as temp_dir:
         saved_paths: List[str] = []
         for upload in files:
-            filename = Path(upload.filename or f"upload_{len(saved_paths) + 1}.las").name
+            filename = Path(
+                upload.filename or f"upload_{len(saved_paths) + 1}.las"
+            ).name
             destination = Path(temp_dir) / filename
             contents = await upload.read()
             destination.write_bytes(contents)
             saved_paths.append(str(destination))
 
-        return _handle_detection(saved_paths, grid_size, params_dict, output_dir, show_legend)
+        return _handle_detection(
+            saved_paths, grid_size, params_dict, output_dir, show_legend
+        )

@@ -250,6 +250,27 @@ def _normalize(
     return np.clip(normalized, 0.0, 1.0).astype(np.float32)
 
 
+def _gaussian_weight(
+    values: NDArray[np.floating],
+    mean: float,
+    sigma: float,
+) -> NDArray[np.float32]:
+    """Return per-value Gaussian weights centered at `mean` with spread `sigma`.
+
+    Args:
+        values: 入力値（例えば各セルの斜度）。
+        mean: 最大重みを与える中心値。
+        sigma: ガウス分布の標準偏差。
+
+    Returns:
+        np.ndarray: 0〜1 に収まるガウス重み。
+    """
+    sigma = max(float(sigma), 1e-6)
+    exponent = -((values - mean) ** 2) / (2.0 * sigma**2)
+    weights = np.exp(exponent)
+    return np.clip(weights, 0.0, 1.0).astype(np.float32)
+
+
 def _resample_to_grid(
     data: NDArray[np.floating],
     mask: Optional[NDArray[np.bool_]],
@@ -363,8 +384,11 @@ def compute_ri(
     # --- 傾斜が好みの角度から外れるほどペナルティを与える ---
     grad_y, grad_x = np.gradient(local_mean, grid.grid_size, grid.grid_size)
     slope_deg = np.degrees(np.arctan(np.hypot(grad_x, grad_y)))
-    slope_pref = max(params.slope_pref_deg, 1e-3)
-    slope_weight = np.exp(-np.square(slope_deg / slope_pref)).astype(np.float32)
+    slope_weight = _gaussian_weight(
+        slope_deg,
+        params.slope_pref_deg,
+        params.slope_sigma_deg,
+    )
 
     # LoG と TPI をブレンドし、最後に 1m スケールで滑らかにする
     raw_score = (0.6 * log_response + 0.4 * np.clip(tpi_norm, 0.0, 1.0)) * slope_weight
@@ -537,6 +561,7 @@ def compute_trail_score(
     ri: NDArray[np.float32],
     gpd: NDArray[np.float32],
     uoi: NDArray[np.float32],
+    weights: Tuple[float, float, float] = (0.6, 0.2, 0.2),
 ) -> NDArray[np.float32]:
     """3 つの指標の平均を取り、0〜1 の最終スコアとして返す。
 
