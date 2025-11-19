@@ -1,0 +1,57 @@
+.results {
+  background: #0f1116;
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.results-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.results h2 {
+  margin: 0;
+  color: #f4f4f4;
+}
+
+.extent {
+  margin: 0;
+  color: #a0a6b9;
+  font-size: 0.9rem;
+}
+
+.result-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.result-grid figure {
+  background: #151922;
+  border-radius: 20px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-height: 420px;
+}
+
+.result-grid img {
+  width: 100%;
+  flex: 1;
+  border-radius: 14px;
+  object-fit: contain;
+  background: #05060b;
+}
+
+.result-grid figcaption {
+  text-align: left;
+  font-weight: 600;
+  color: #e3e7f1;
+  font-size: 1rem;
+}

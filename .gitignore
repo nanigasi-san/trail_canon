@@ -1,0 +1,13 @@
+# backend
+trail_results
+__pycache__
+.venv
+
+# frontend
+node_modules
+dist
+
+# other
+.vscode
+.idea
+.DS_Store
