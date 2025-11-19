@@ -122,6 +122,25 @@
   margin-top: -0.2rem;
 }
 
+.metric-section {
+  border-top: 1px solid #2c303c;
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+.metric-section:first-of-type {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0.5rem;
+}
+
+.metric-section h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  color: #f0f0f0;
+  font-weight: 600;
+}
+
 .primary {
   align-self: flex-start;
   background: linear-gradient(120deg, #ff8a00, #e52e71);

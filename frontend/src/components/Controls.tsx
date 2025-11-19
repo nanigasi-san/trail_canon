@@ -8,7 +8,11 @@ export interface FormState {
   tpiScale: string;
   slopePref: string;
   densityPercentile: string;
+  gpdGridSize: string;
+  gpdClasses: string;
   uoiHeightBand: string;
+  uoiFlatGridSize: string;
+  uoiClasses: string;
   uoiPercentile: string;
   showLegend: boolean;
 }
@@ -111,71 +115,128 @@ export function Controls({
         <span className="chevron" aria-hidden="true" />
       </button>
       <div className={`advanced-panel ${advancedOpen ? "open" : ""}`}>
-        <div className="field-grid">
-          <label className="field">
-            <span>Ridge scales (m)</span>
-            <input
-              type="text"
-              name="ridgeScales"
-              value={formState.ridgeScales}
-              onChange={handleInput}
-              placeholder="3,6,9"
-            />
-          </label>
-          <label className="field">
-            <span>TPI scale (m)</span>
-            <input
-              type="number"
-              step="1"
-              name="tpiScale"
-              value={formState.tpiScale}
-              onChange={handleInput}
-              placeholder="15"
-            />
-          </label>
-          <label className="field">
-            <span>Slope preference (deg)</span>
-            <input
-              type="number"
-              step="1"
-              name="slopePref"
-              value={formState.slopePref}
-              onChange={handleInput}
-              placeholder="20"
-            />
-          </label>
-          <label className="field">
-            <span>Density percentile</span>
-            <input
-              type="number"
-              step="1"
-              name="densityPercentile"
-              value={formState.densityPercentile}
-              onChange={handleInput}
-              placeholder="99"
-            />
-          </label>
-          <label className="field">
-            <span>UOI height band (m)</span>
-            <input
-              type="text"
-              name="uoiHeightBand"
-              value={formState.uoiHeightBand}
-              onChange={handleInput}
-              placeholder="0,1"
-            />
-          </label>
-          <label className="field">
-            <span>UOI percentile</span>
-            <input
-              type="number"
-              step="1"
-              name="uoiPercentile"
-              value={formState.uoiPercentile}
-              onChange={handleInput}
-              placeholder="95"
-            />
-          </label>
+        <div className="metric-section">
+          <h4>尾根度 (Ridge Index / RI)</h4>
+          <div className="field-grid">
+            <label className="field">
+              <span>Ridge scales (m)</span>
+              <input
+                type="text"
+                name="ridgeScales"
+                value={formState.ridgeScales}
+                onChange={handleInput}
+                placeholder="3,6,9"
+              />
+            </label>
+            <label className="field">
+              <span>TPI scale (m)</span>
+              <input
+                type="number"
+                step="1"
+                name="tpiScale"
+                value={formState.tpiScale}
+                onChange={handleInput}
+                placeholder="15"
+              />
+            </label>
+            <label className="field">
+              <span>Slope preference (deg)</span>
+              <input
+                type="number"
+                step="1"
+                name="slopePref"
+                value={formState.slopePref}
+                onChange={handleInput}
+                placeholder="20"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="metric-section">
+          <h4>地表点密度 (Ground Point Density / GPD)</h4>
+          <div className="field-grid">
+            <label className="field">
+              <span>Density percentile</span>
+              <input
+                type="number"
+                step="1"
+                name="densityPercentile"
+                value={formState.densityPercentile}
+                onChange={handleInput}
+                placeholder="99"
+              />
+            </label>
+            <label className="field">
+              <span>Density grid size (m)</span>
+              <input
+                type="number"
+                step="0.1"
+                name="gpdGridSize"
+                value={formState.gpdGridSize}
+                onChange={handleInput}
+                placeholder="1.0"
+              />
+            </label>
+            <label className="field">
+              <span>Density classes</span>
+              <input
+                type="text"
+                name="gpdClasses"
+                value={formState.gpdClasses}
+                onChange={handleInput}
+                placeholder="2"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="metric-section">
+          <h4>下草開放度 (Undergrowth Openness / UOI)</h4>
+          <div className="field-grid">
+            <label className="field">
+              <span>UOI height band (m)</span>
+              <input
+                type="text"
+                name="uoiHeightBand"
+                value={formState.uoiHeightBand}
+                onChange={handleInput}
+                placeholder="0,1"
+              />
+            </label>
+            <label className="field">
+              <span>Flat grid size (m)</span>
+              <input
+                type="number"
+                step="0.1"
+                name="uoiFlatGridSize"
+                value={formState.uoiFlatGridSize}
+                onChange={handleInput}
+                placeholder="1.0"
+              />
+            </label>
+            <label className="field">
+              <span>Flatness classes</span>
+              <input
+                type="text"
+                name="uoiClasses"
+                value={formState.uoiClasses}
+                onChange={handleInput}
+                placeholder="2,4,22"
+              />
+            </label>
+            <label className="field">
+              <span>UOI percentile</span>
+              <input
+                type="number"
+                step="1"
+                name="uoiPercentile"
+                value={formState.uoiPercentile}
+                onChange={handleInput}
+                placeholder="95"
+              />
+            </label>
+          </div>
         </div>
       </div>
 

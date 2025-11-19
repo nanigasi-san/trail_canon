@@ -7,10 +7,10 @@ interface ResultGridProps {
 }
 
 const imageMeta = [
+  { key: "trail_score", label: "Trail Score" },
   { key: "ridge", label: "Ridge Index" },
   { key: "gpd", label: "Ground Point Density" },
   { key: "uoi", label: "Undergrowth Openness" },
-  { key: "trail_score", label: "Trail Score" },
 ] as const;
 
 /**
