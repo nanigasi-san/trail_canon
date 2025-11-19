@@ -13,6 +13,9 @@ const imageMeta = [
   { key: "trail_score", label: "Trail Score" },
 ] as const;
 
+/**
+ * Display a 2x2 grid of generated PNG heatmaps along with optional extent metadata.
+ */
 export function ResultGrid({ images, extent }: ResultGridProps) {
   return (
     <section className="results">

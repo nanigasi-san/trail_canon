@@ -4,6 +4,9 @@ import { detectTrails, type TrailImages } from "./api";
 import { Controls, type FormState } from "./components/Controls";
 import { ResultGrid } from "./components/ResultGrid";
 
+/**
+ * Default UI values that mirror the backend TrailParams defaults.
+ */
 const initialFormState: FormState = {
   gridSize: "1",
   outputDir: "./trail_results",
@@ -16,6 +19,9 @@ const initialFormState: FormState = {
   showLegend: false,
 };
 
+/**
+ * Root application component that wires up form state and renders results.
+ */
 function App() {
   const [formState, setFormState] = useState<FormState>(initialFormState);
   const [images, setImages] = useState<TrailImages | null>(null);
@@ -25,15 +31,24 @@ function App() {
   const [status, setStatus] = useState<string>("Provide point cloud paths to begin.");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
+  /**
+   * Merge a shallow subset of form fields into the canonical state object.
+   */
   const handleFormChange = (next: Partial<FormState>) => {
     setFormState((prev) => ({ ...prev, ...next }));
   };
 
+  /**
+   * Cache the File objects selected in the input and surface them in the UI.
+   */
   const handleFilesPicked = (fileList: FileList | null) => {
     const files = fileList ? Array.from(fileList) : [];
     setSelectedFiles(files);
   };
 
+  /**
+   * Convert comma/space separated numeric text into a number array, or undefined when empty.
+   */
   const parseList = (value: string): number[] | undefined => {
     const parts = value
       .split(/[, \r\n]+/)
@@ -43,6 +58,9 @@ function App() {
     return parts.length ? parts : undefined;
   };
 
+  /**
+   * Submit the form to the backend API, surfacing progress/errors in the UI.
+   */
   const handleSubmit = async () => {
     if (!selectedFiles.length) {
       setError("LAS/LAZ ファイルを選択してください。");

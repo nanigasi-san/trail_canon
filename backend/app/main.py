@@ -45,7 +45,14 @@ def _error(message: str, status_code: int = 400) -> JSONResponse:
 
 
 def _render_heatmap(array: np.ndarray, out_path: Path, cmap: str, show_legend: bool) -> None:
-    """Save a single-channel array as a PNG heatmap."""
+    """Save a single-channel array as a PNG heatmap.
+
+    Args:
+        array: 0〜1 の数値を持つ 2D 配列。
+        out_path: PNG を保存するパス。
+        cmap: matplotlib カラーマップ名。
+        show_legend: True の場合は右側に凡例バーを描画。
+    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if show_legend:
         fig = plt.figure(figsize=(4.8, 4), dpi=200)
@@ -64,7 +71,16 @@ def _render_heatmap(array: np.ndarray, out_path: Path, cmap: str, show_legend: b
 
 
 def _save_images(arrays: Dict[str, np.ndarray], run_id: str, show_legend: bool) -> Dict[str, str]:
-    """Render all rasters and return HTTP paths."""
+    """Render all rasters and return HTTP paths.
+
+    Args:
+        arrays: metric 名をキーにした 2D 配列の辞書。
+        run_id: 保存先ディレクトリを区別する ID。
+        show_legend: True なら凡例を描画。
+
+    Returns:
+        dict: metric 名 -> 静的ファイル URL。
+    """
     cmap_map = {
         "ridge": "magma",
         "gpd": "viridis",
@@ -81,6 +97,12 @@ def _save_images(arrays: Dict[str, np.ndarray], run_id: str, show_legend: bool) 
 
 
 def _copy_results_to_output(files: Dict[str, str], destination: Path) -> None:
+    """Persist rendered PNGs to a caller-specified directory for convenience.
+
+    Args:
+        files: metric 名 -> 静的 URL の辞書。
+        destination: コピー先ディレクトリ。
+    """
     destination.mkdir(parents=True, exist_ok=True)
     for url in files.values():
         filename = Path(url).name
@@ -96,6 +118,18 @@ def _run_detection_pipeline(
     output_dir: Optional[str],
     show_legend: bool,
 ) -> TrailDetectResponse:
+    """Execute the full detection pipeline and return a formatted response payload.
+
+    Args:
+        pointcloud_files: LAS/LAZ ファイルパス群。
+        grid_size: DEM 解像度。
+        params_override: TrailParams の上書き辞書。
+        output_dir: 結果画像をコピーする任意ディレクトリ。
+        show_legend: True の場合は凡例付き PNG を生成。
+
+    Returns:
+        TrailDetectResponse: FastAPI スキーマに沿った成功レスポンス。
+    """
     params_dict: Dict[str, Any] = {"grid_size": grid_size}
     if params_override:
         params_dict.update(params_override)
@@ -129,6 +163,18 @@ def _handle_detection(
     output_dir: Optional[str],
     show_legend: bool,
 ):
+    """Validate parameters, run trail detection, and translate known failures to API errors.
+
+    Args:
+        pointcloud_files: LAS/LAZ ファイルパス群。
+        grid_size: DEM 解像度。
+        params_override: TrailParams の上書き辞書。
+        output_dir: 結果コピー先。
+        show_legend: 凡例を描画するか。
+
+    Returns:
+        TrailDetectResponse | JSONResponse: 成功なら TrailDetectResponse、失敗時はエラーレスポンス。
+    """
     try:
         return _run_detection_pipeline(pointcloud_files, grid_size, params_override, output_dir, show_legend)
     except ValidationError as exc:
@@ -147,7 +193,14 @@ def _handle_detection(
     responses={400: {"model": TrailErrorResponse}},
 )
 async def detect_trails(payload: TrailDetectRequest):
-    """Main endpoint: read LAS files, compute metrics, and respond with PNGs."""
+    """Main endpoint: read LAS files, compute metrics, and respond with PNGs.
+
+    Args:
+        payload: Pydantic で検証済みの入力。
+
+    Returns:
+        TrailDetectResponse | JSONResponse: 成功レスポンスか 400/500 エラー。
+    """
     return _handle_detection(
         payload.pointcloud_files,
         payload.grid_size,
@@ -169,7 +222,18 @@ async def detect_trails_from_upload(
     params: Optional[str] = Form(None),
     show_legend: bool = Form(False),
 ):
-    """Endpoint that accepts LAS/LAZ uploads instead of filesystem paths."""
+    """Endpoint that accepts LAS/LAZ uploads instead of filesystem paths.
+
+    Args:
+        files: クライアントから送信された LAS/LAZ バイナリ。
+        grid_size: DEM 解像度。
+        output_dir: 任意の結果コピー先。
+        params: JSON 文字列として渡された TrailParams 上書き。
+        show_legend: 凡例有無。
+
+    Returns:
+        TrailDetectResponse | JSONResponse: 成功レスポンスか検証エラー。
+    """
     if not files:
         return _error("At least one LAS/LAZ file must be uploaded.", status_code=400)
 

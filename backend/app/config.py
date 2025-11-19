@@ -24,7 +24,11 @@ class Settings(BaseModel):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return a cached Settings instance and ensure directories exist."""
+    """Return a cached Settings instance and ensure directories exist.
+
+    Returns:
+        Settings: 実行時設定 (結果ディレクトリなど)。
+    """
     settings = Settings()
     settings.static_root.mkdir(parents=True, exist_ok=True)
     return settings

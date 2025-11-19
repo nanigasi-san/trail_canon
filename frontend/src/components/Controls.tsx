@@ -22,6 +22,9 @@ interface ControlsProps {
   selectedFiles: File[];
 }
 
+/**
+ * Form component responsible for collecting point cloud paths and parameter overrides.
+ */
 export function Controls({
   formState,
   onChange,
@@ -32,11 +35,17 @@ export function Controls({
 }: ControlsProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
+  /**
+   * Update text/number fields by name while preserving other form inputs.
+   */
   const handleInput = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     onChange({ [name]: value });
   };
 
+  /**
+   * Special-case handler for boolean toggles (checkboxes) to keep typing explicit.
+   */
   const handleCheckbox = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = event.target;
     onChange({ [name]: checked } as Partial<FormState>);

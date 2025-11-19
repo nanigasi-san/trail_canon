@@ -35,6 +35,9 @@ export interface TrailErrorResponse {
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000").replace(/\/+$/, "");
 
+/**
+ * Remove undefined/null entries from the params object so the backend only receives real overrides.
+ */
 const sanitizeParams = (params?: TrailParams): TrailParams | undefined => {
   if (!params) return undefined;
   const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null);
@@ -42,6 +45,9 @@ const sanitizeParams = (params?: TrailParams): TrailParams | undefined => {
   return Object.fromEntries(entries) as TrailParams;
 };
 
+/**
+ * Ensure image URLs returned by the API resolve correctly regardless of dev/prod host.
+ */
 const toAbsoluteUrl = (path: string): string => {
   try {
     return new URL(path, `${API_BASE_URL}/`).toString();
@@ -50,6 +56,9 @@ const toAbsoluteUrl = (path: string): string => {
   }
 };
 
+/**
+ * Upload LAS files plus parameter overrides and return the backend's detection payload.
+ */
 export async function detectTrails(options: TrailDetectOptions): Promise<TrailDetectResponse> {
   const formData = new FormData();
   if (!options.files.length) {
