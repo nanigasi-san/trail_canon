@@ -12,6 +12,7 @@ export interface TrailDetectOptions {
   gridSize: number;
   outputDir?: string;
   params?: TrailParams;
+  showLegend?: boolean;
 }
 
 export interface TrailImages {
@@ -61,6 +62,7 @@ export async function detectTrails(options: TrailDetectOptions): Promise<TrailDe
   if (options.outputDir) {
     formData.append("output_dir", options.outputDir);
   }
+  formData.append("show_legend", options.showLegend ? "true" : "false");
   const params = sanitizeParams(options.params);
   if (params) {
     formData.append("params", JSON.stringify(params));

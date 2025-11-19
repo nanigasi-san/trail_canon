@@ -20,6 +20,10 @@ class TrailDetectRequest(BaseModel):
         default=None,
         description="Optional overrides for trail metric parameters.",
     )
+    show_legend: bool = Field(
+        default=False,
+        description="Set true to render each PNG with a 0-1 colorbar legend.",
+    )
 
     @field_validator("pointcloud_files")
     @classmethod

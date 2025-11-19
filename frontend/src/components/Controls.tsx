@@ -1,4 +1,4 @@
-import type { ChangeEvent } from "react";
+import { useState, type ChangeEvent } from "react";
 import "./Controls.css";
 
 export interface FormState {
@@ -10,6 +10,7 @@ export interface FormState {
   densityPercentile: string;
   uoiHeightBand: string;
   uoiPercentile: string;
+  showLegend: boolean;
 }
 
 interface ControlsProps {
@@ -29,9 +30,16 @@ export function Controls({
   onFilesPicked,
   selectedFiles,
 }: ControlsProps) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
   const handleInput = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
     onChange({ [name]: value });
+  };
+
+  const handleCheckbox = (event: ChangeEvent<HTMLInputElement>) => {
+    const { name, checked } = event.target;
+    onChange({ [name]: checked } as Partial<FormState>);
   };
 
   return (
@@ -59,6 +67,7 @@ export function Controls({
             name="gridSize"
             value={formState.gridSize}
             onChange={handleInput}
+            placeholder="1.0"
           />
         </label>
 
@@ -74,68 +83,91 @@ export function Controls({
         </label>
       </div>
 
-      <h3>Advanced parameters</h3>
-      <div className="field-grid">
-        <label className="field">
-          <span>Ridge scales (m)</span>
-          <input
-            type="text"
-            name="ridgeScales"
-            value={formState.ridgeScales}
-            onChange={handleInput}
-            placeholder="3,6,9"
-          />
-        </label>
-        <label className="field">
-          <span>TPI scale (m)</span>
-          <input
-            type="number"
-            step="1"
-            name="tpiScale"
-            value={formState.tpiScale}
-            onChange={handleInput}
-          />
-        </label>
-        <label className="field">
-          <span>Slope preference (deg)</span>
-          <input
-            type="number"
-            step="1"
-            name="slopePref"
-            value={formState.slopePref}
-            onChange={handleInput}
-          />
-        </label>
-        <label className="field">
-          <span>Density percentile</span>
-          <input
-            type="number"
-            step="1"
-            name="densityPercentile"
-            value={formState.densityPercentile}
-            onChange={handleInput}
-          />
-        </label>
-        <label className="field">
-          <span>UOI height band (m)</span>
-          <input
-            type="text"
-            name="uoiHeightBand"
-            value={formState.uoiHeightBand}
-            onChange={handleInput}
-            placeholder="0,1"
-          />
-        </label>
-        <label className="field">
-          <span>UOI percentile</span>
-          <input
-            type="number"
-            step="1"
-            name="uoiPercentile"
-            value={formState.uoiPercentile}
-            onChange={handleInput}
-          />
-        </label>
+      <label className="field checkbox-field">
+        <span>凡例（0-1 カラーバー）を表示</span>
+        <input
+          type="checkbox"
+          name="showLegend"
+          checked={formState.showLegend}
+          onChange={handleCheckbox}
+        />
+      </label>
+
+      <button
+        type="button"
+        className={`advanced-toggle ${advancedOpen ? "open" : ""}`}
+        onClick={() => setAdvancedOpen((prev) => !prev)}
+      >
+        <span>Advanced parameters</span>
+        <span className="chevron" aria-hidden="true" />
+      </button>
+      <div className={`advanced-panel ${advancedOpen ? "open" : ""}`}>
+        <div className="field-grid">
+          <label className="field">
+            <span>Ridge scales (m)</span>
+            <input
+              type="text"
+              name="ridgeScales"
+              value={formState.ridgeScales}
+              onChange={handleInput}
+              placeholder="3,6,9"
+            />
+          </label>
+          <label className="field">
+            <span>TPI scale (m)</span>
+            <input
+              type="number"
+              step="1"
+              name="tpiScale"
+              value={formState.tpiScale}
+              onChange={handleInput}
+              placeholder="15"
+            />
+          </label>
+          <label className="field">
+            <span>Slope preference (deg)</span>
+            <input
+              type="number"
+              step="1"
+              name="slopePref"
+              value={formState.slopePref}
+              onChange={handleInput}
+              placeholder="20"
+            />
+          </label>
+          <label className="field">
+            <span>Density percentile</span>
+            <input
+              type="number"
+              step="1"
+              name="densityPercentile"
+              value={formState.densityPercentile}
+              onChange={handleInput}
+              placeholder="99"
+            />
+          </label>
+          <label className="field">
+            <span>UOI height band (m)</span>
+            <input
+              type="text"
+              name="uoiHeightBand"
+              value={formState.uoiHeightBand}
+              onChange={handleInput}
+              placeholder="0,1"
+            />
+          </label>
+          <label className="field">
+            <span>UOI percentile</span>
+            <input
+              type="number"
+              step="1"
+              name="uoiPercentile"
+              value={formState.uoiPercentile}
+              onChange={handleInput}
+              placeholder="95"
+            />
+          </label>
+        </div>
       </div>
 
       <button className="primary" type="button" onClick={onSubmit} disabled={disabled}>

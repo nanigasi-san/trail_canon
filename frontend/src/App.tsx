@@ -13,6 +13,7 @@ const initialFormState: FormState = {
   densityPercentile: "99",
   uoiHeightBand: "0,1",
   uoiPercentile: "95",
+  showLegend: false,
 };
 
 function App() {
@@ -53,6 +54,7 @@ function App() {
       files: selectedFiles,
       gridSize,
       outputDir: formState.outputDir.trim() || undefined,
+      showLegend: formState.showLegend,
       params: {
         ridge_scales_m: parseList(formState.ridgeScales),
         tpi_scale_m: Number(formState.tpiScale) || undefined,

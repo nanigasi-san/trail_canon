@@ -60,6 +60,68 @@
   gap: 1rem;
 }
 
+.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+  accent-color: #ff8a00;
+}
+
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  background: #1b1d23;
+  border: 1px solid #2a2f3c;
+  color: #f4f4f4;
+  padding: 0.65rem 0.95rem;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.advanced-toggle .chevron {
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.25s ease;
+}
+
+.advanced-toggle.open {
+  background: #222530;
+  border-color: #414757;
+}
+
+.advanced-toggle.open .chevron {
+  transform: rotate(225deg);
+}
+
+.advanced-panel {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: max-height 0.4s ease, opacity 0.3s ease, transform 0.3s ease;
+}
+
+.advanced-panel.open {
+  max-height: 1200px;
+  opacity: 1;
+  transform: translateY(0);
+  margin-top: -0.2rem;
+}
+
 .primary {
   align-self: flex-start;
   background: linear-gradient(120deg, #ff8a00, #e52e71);
