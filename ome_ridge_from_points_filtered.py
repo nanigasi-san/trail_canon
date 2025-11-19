@@ -1,3 +1,4 @@
+# type: ignore
 from __future__ import annotations
 
 import argparse
@@ -241,12 +242,7 @@ def compute_density_counts_grid(
     y = y[ground_mask]
     cols = np.floor((x - grid["xmin"]) / grid["gs"]).astype(np.int64)
     rows = np.floor((y - grid["ymin"]) / grid["gs"]).astype(np.int64)
-    valid = (
-        (cols >= 0)
-        & (cols < grid["nx"])
-        & (rows >= 0)
-        & (rows < grid["ny"])
-    )
+    valid = (cols >= 0) & (cols < grid["nx"]) & (rows >= 0) & (rows < grid["ny"])
     cols = cols[valid]
     rows = rows[valid]
     counts = np.zeros(grid["ny"] * grid["nx"], dtype=np.int32)
@@ -392,6 +388,7 @@ DENSITY_LEVEL_NORM = BoundaryNorm(
     len(DENSITY_LEVEL_COLORS),
 )
 DENSITY_LEVEL_CMAP = ListedColormap(DENSITY_LEVEL_COLORS)
+
 
 def save_histogram(array: np.ndarray, out_path: Path) -> None:
     data = array[np.isfinite(array)].ravel()

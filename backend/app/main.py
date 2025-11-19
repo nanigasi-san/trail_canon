@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import shutil
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, cast
 from uuid import uuid4
 
 import matplotlib
@@ -21,16 +21,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
+from starlette.middleware import _MiddlewareFactory
 
 from .config import get_settings
 from .core.algorithms import TrailParams, run_trail_detection
-from .schemas import TrailDetectRequest, TrailDetectResponse, TrailErrorResponse
+from .schemas import TrailDetectRequest, TrailDetectResponse, TrailErrorResponse, TrailImagePaths
 
 settings = get_settings()
 
 app = FastAPI(title="Trail Detector API", version="0.1.0")
+# Cast is needed because ty expects a `_MiddlewareFactory`, while CORSMiddleware subclasses BaseHTTPMiddleware.
 app.add_middleware(
-    CORSMiddleware,
+    cast(_MiddlewareFactory[Any], CORSMiddleware),
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
@@ -56,11 +58,11 @@ def _render_heatmap(array: np.ndarray, out_path: Path, cmap: str, show_legend: b
     out_path.parent.mkdir(parents=True, exist_ok=True)
     if show_legend:
         fig = plt.figure(figsize=(4.8, 4), dpi=200)
-        ax = fig.add_axes([0, 0, 0.85, 1])
-        cax = fig.add_axes([0.88, 0.1, 0.03, 0.8])
+        ax = fig.add_axes((0.0, 0.0, 0.85, 1.0))
+        cax = fig.add_axes((0.88, 0.1, 0.03, 0.8))
     else:
         fig = plt.figure(figsize=(4, 4), dpi=200)
-        ax = fig.add_axes([0, 0, 1, 1])
+        ax = fig.add_axes((0.0, 0.0, 1.0, 1.0))
     ax.axis("off")
     image = ax.imshow(array, cmap=cmap, vmin=0.0, vmax=1.0, origin="lower")
     if show_legend:
@@ -136,23 +138,26 @@ def _run_detection_pipeline(
     params = TrailParams(**params_dict)
 
     results = run_trail_detection(pointcloud_files, params)
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     run_id = f"{timestamp}_{uuid4().hex[:6]}"
-    arrays = {
-        "ridge": results["ri"],
-        "gpd": results["gpd"],
-        "uoi": results["uoi"],
-        "trail_score": results["trail_score"],
+    arrays: Dict[str, np.ndarray] = {
+        "ridge": cast(np.ndarray, results["ri"]),
+        "gpd": cast(np.ndarray, results["gpd"]),
+        "uoi": cast(np.ndarray, results["uoi"]),
+        "trail_score": cast(np.ndarray, results["trail_score"]),
     }
     image_paths = _save_images(arrays, run_id, show_legend)
 
     if output_dir:
         _copy_results_to_output(image_paths, Path(output_dir).expanduser())
 
+    grid_meta = cast(Dict[str, Any], results["grid"])
+    extent_values = cast(Sequence[float], grid_meta["extent"])
+
     return TrailDetectResponse(
         status="ok",
-        extent=[float(value) for value in results["grid"]["extent"]],
-        images=image_paths,
+        extent=[float(value) for value in extent_values],
+        images=TrailImagePaths(**image_paths),
     )
 
 
