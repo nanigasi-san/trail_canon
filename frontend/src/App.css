@@ -1,0 +1,57 @@
+.app {
+  width: min(1100px, 100%);
+  padding: 2rem;
+  color: #f0f2f8;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  background: rgba(10, 12, 20, 0.8);
+  border-radius: 24px;
+  box-shadow: 0 20px 45px rgba(2, 5, 20, 0.65);
+}
+
+header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 0.85rem;
+  color: #b0b5c5;
+}
+
+.status {
+  margin: 0;
+  color: #cfd4e6;
+}
+
+.error {
+  margin: 0;
+  color: #ff8080;
+  font-weight: 600;
+}
+
+main {
+  display: grid;
+  grid-template-columns: minmax(320px, 2fr) minmax(320px, 3fr);
+  gap: 1.5rem;
+}
+
+@media (max-width: 992px) {
+  .app {
+    padding: 1.25rem;
+  }
+
+  main {
+    grid-template-columns: 1fr;
+  }
+}
